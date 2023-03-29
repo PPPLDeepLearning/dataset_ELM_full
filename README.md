@@ -1,6 +1,19 @@
 # ELM training dataset
 
-This dataset tries to reproduce the data used for ELM prediction.
+This dataset is used for ELM prediction, it is defined in dataset.yaml.
+The notebook `shots_overview.ipynb` sketches how the dataset is collected. This is forensic work
+to reconstruct lost, prior knowledge.
+
+The definitions of the predictors are given in [d3d_signals](https://github.com/PlasmaControl/d3d_signals).
+The TTELM target is calculated in post-processing.
+
+
+
+
+## Approach
+Below are notes how the original dataset has been reconstructed
+
+
 As a start, I'm looking at Ge's folder `stellar:/projects/FRNN/gdong-temp/ELM/elm-d3d-data-fs07`
 The `conf.yaml` lists the following folders to be parsed:
 * /../../../tigress/FRNN/signal_data_ipsip/
