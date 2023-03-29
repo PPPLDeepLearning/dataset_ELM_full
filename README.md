@@ -15,11 +15,37 @@ the TTELM target (which is done in post-processing), and the pedestal info prmta
 
 The TTELM target is calculated in post-processing.
 
+## New: Checking signal availability in downloads.py
+This dataset contains over 43,000 shots. Not all signals are available for every shot.
+The file `download.py` will compile which signals could be successfully downloaded from D3D in
+the csv file df_progress.csv through the use of a pandas dataframe.
+The dataframe contains columns of shotnr and all the predictors in `dataset.yaml`. 
+A true in a predictor column indicates that the signal is available in D3D MDS.
+A false indicates that it is not available.
+
+When building a [dataset](https://github.com/PlasmaControl/d3d_loaders), only pick the shots that
+have all requested predictors available. This can be done through the dataframe loaded in
+`verify_downloads.ipynb`, f.ex.:
+```
+df[(df["bmstinj"] == True) & (df["dusbradial"] == True)]
+```
+selects only the rows that have both, `bmstinj` and `dusbradial`.
+
+## New: Notebook to verify ELM detection code.
+Ge's code uses the routine `find_elm_events_tar`, in the file `find_elms.py`. Search for it:
+```
+[stellar]:/projects/FRNN/gdong-temp $ find . -type f -name "find_elms.py"
+```
+
+I used this notebook to visualize what it does. The TTELM is written into the shots hdf5 file,
+located in `datasets/XXXXXX.h5` in the group "target". This is done in `generate_ttelm.py` and
+executed in `instantiate.sh`.
 
 
 
-## Approach
-Below are notes how the original dataset has been reconstructed
+## Detective work to reconstruct dataset.yaml from previous work
+Below are notes how the original dataset has been reconstructed. These are working notes for the
+notebook `verify_downloads.ipynb`.
 
 
 As a start, I'm looking at Ge's folder `stellar:/projects/FRNN/gdong-temp/ELM/elm-d3d-data-fs07`
