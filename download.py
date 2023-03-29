@@ -11,21 +11,23 @@ import MDSplus as mds
 import numpy as np
 import os
 from os.path import join
-
+import random
 import logging
 import yaml
 
 import argparse
+from importlib import resources
+
+import pandas as pd
 
 import d3d_signals
-resource_path = importlib.resources.files("d3d_signals")
 
 
 logging.basicConfig(filename="instantiate.log",
+                    filemode="w",
                     format="%(asctime)s    %(message)s",
                     encoding="utf-8",
                     level=logging.INFO)
-
 
 
 parser = argparse.ArgumentParser(
@@ -59,7 +61,7 @@ with open(args.dataset_def, "r") as stream:
 #   Node - The name of the MDS node the data is stored in
 #   map_to - The group in the HDF5 file the data will be stored in
 
-resource_path = importlib.resources.files("d3d_signals")
+resource_path = resources.files("d3d_signals")
 
 with open(join(resource_path, "signals_0d.yaml"), "r") as fp:
     signals_0d = yaml.safe_load(fp)
@@ -72,13 +74,28 @@ with open(join(resource_path, "signals_1d.yaml"), "r") as fp:
 # Open Connection to D3D atlas server
 conn = mds.Connection("atlas.gat.com")
 
-shotlist = list(dataset_def["shots"].keys())
+shotlist = dataset_def["shots"]
 
 logging.info(f"Processing shots {shotlist}")
 
+# This dataframe stores what data could and could not be collected for each shot.
+df_columns = ["shotnr"] + dataset_def["predictors"]
+df_col_defs = {"shotnr": pd.Series(dtype="int")}
+for p in dataset_def["predictors"]:
+    df_col_defs.update({p: pd.Series(dtype="bool")})
 
-for shotnr in shotlist[:5]:
+
+df_progress = pd.DataFrame(df_col_defs)
+
+
+for shotnr in shotlist[-200:]:
     logging.info(f"{shotnr} - Processing")
+
+    # Start building a dictionary for data collection for the current shot.
+    # This will be a dict: {"shotnr": shotnr, "pred_1": True, ..., "pred_m": False, ...}
+    # Where True means data could be downloaded correctly
+    # False mean data could not be downloaded
+    df_row = {"shotnr": shotnr}
 
     # File mode needs to be append! Otherwise we delete the file contents every time we
     # execute this script.
@@ -87,15 +104,16 @@ for shotnr in shotlist[:5]:
         # Handle each of the three data kinds separately.
         # Second scalar data
         for pred in dataset_def["predictors"]:
-            if pred in scalars_dict.keys():
-                if scalars_dict[pred]["type"] == "MDS":
-                    tree = scalars_dict[pred]["tree"]
-                    node = scalars_dict[pred]["node"]
-                    map_to = scalars_dict[pred]["map_to"]
+            if pred in signals_0d.keys():
+                if signals_0d[pred]["type"] == "MDS":
+                    tree = signals_0d[pred]["tree"]
+                    node = signals_0d[pred]["node"]
+                    map_to = signals_0d[pred]["map_to"]
                     # Skip the download if there already is data in the HDF5 file
                     try:
                         df[map_to]
                         logging.info(f"Signal {map_to} already exists. Skipping download")
+                        df_row.update({pred: True})
                         continue
                     except KeyError:
                         pass
@@ -111,9 +129,11 @@ for shotnr in shotlist[:5]:
                         xdata = conn.get('dim_of(_s)').data()
                         xunits = conn.get('units_of(dim_of(_s))').data()
                         logging.info(f"Downloaded xdata. shape={xdata.shape}")
+                        df_row.update({pred: True})
                     except Exception as err:
                         logging.error(f"Failed to download {tree}::{node} from MDS - {err}")
-                        raise err
+                        df_row.update({pred: False})
+                        continue
 
                     # Data is now downloaded. Store them in HDF5
                     try:
@@ -133,14 +153,15 @@ for shotnr in shotlist[:5]:
 
                     logging.info(f"Stored {tree}::{node} into {grp}")
 
-                elif scalars_dict[pred]["type"] == "PTDATA":
-                    node = scalars_dict[pred]["node"]
-                    map_to = scalars_dict[pred]["map_to"]
+                elif signals_0d[pred]["type"] == "PTDATA":
+                    node = signals_0d[pred]["node"]
+                    map_to = signals_0d[pred]["map_to"]
                     # Skip the download if there already is data in the HDF5 file
                     try:
-                        if df[map_to]["zdata"].size > 0:
-                            logging.info(f"Signal {map_to} already exists. Skipping download")
-                            continue
+                        df[map_to]
+                        logging.info(f"Signal {map_to} already exists. Skipping download")
+                        df_row.update({pred: True})
+                        continue
                     except KeyError:
                         pass
 
@@ -150,12 +171,14 @@ for shotnr in shotlist[:5]:
                         xdata = conn.get("dim_of(_s)")
                         logging.info(f"Downloaded zdata. shape={zdata.shape}")
                         logging.info(f"Downloaded xdata. shape={xdata.shape}")
+                        df_row.update({pred: True})
                     except Exception as err:
                         logging.error(f"Failed to download {node} from PTDATA - {err}")
+                        df_row.update({pred: False})
                         continue
                 # Data is downloaded. Store them in HDF5
                     try:
-                        grp = df.create_group(f"{scalars_dict[pred]['map_to']}")
+                        grp = df.create_group(f"{signals_0d[pred]['map_to']}")
                         grp.attrs.create("origin", f"PTDATA {node}")
                         for ds_name, ds_data in zip(["xdata", "zdata"],
                                                     [xdata, zdata]):
@@ -167,14 +190,15 @@ for shotnr in shotlist[:5]:
 
                     logging.info(f"Stored PTDATA {node} into {grp}")
 
-            elif pred in profile_dict.keys():
-                    tree = profile_dict[pred]["tree"]
-                    node = profile_dict[pred]["node"]
-                    map_to = profile_dict[pred]["map_to"]
+            elif pred in signals_1d.keys():
+                    tree = signals_1d[pred]["tree"]
+                    node = signals_1d[pred]["node"]
+                    map_to = signals_1d[pred]["map_to"]
                     # Skip the download if there already is data in the HDF5 file
                     try:
                         df[map_to]
                         logging.info(f"Signal {map_to} already exists. Skipping download")
+                        df_row.update({pred: True})
                         continue
                     except KeyError:
                         pass
@@ -198,11 +222,12 @@ for shotnr in shotlist[:5]:
                         xdata = conn.get('dim_of(_s, 1)').data()
                         xunits = conn.get('units_of(dim_of(_s, 1))').data()
                         logging.info(f"Downloaded ydata. shape={xdata.shape}, yunits={xunits}")
-
+                        df_row.update({pred: True})
 
                     except Exception as err:
                         logging.error(f"Failed to download {tree}::{node} from MDS - {err}")
-                        raise err
+                        df_row.update({pred: False})
+                        continue
 
                     # Data is now downloaded. Store them in HDF5
                     try:
@@ -222,7 +247,10 @@ for shotnr in shotlist[:5]:
 
                     logging.info(f"Stored {tree}::{node} into {grp}")
             else:
-                raise ValueError("Couldn't find {pred} in either scalar of profile data description.")
+                raise ValueError(f"Couldn't find {pred} in either scalar of profile data description.")
+
+        # Append success/fail log of each predictor to progress dataframe
+        df_progress.loc[len(df_progress)] = df_row
 
         # # Iterate over all predictors and find the shortest time-base
         # tmax = 100_000
@@ -247,6 +275,9 @@ for shotnr in shotlist[:5]:
         # df.attrs.create("tmin", tmin)
 
         #break
+
+# Write dataframe that shows which data was and was not downloaded
+df_progress.to_csv("df_progress.csv")
 
     
 # # end of file downloading.py
