@@ -2,9 +2,17 @@
 
 This dataset is used for ELM prediction, it is defined in dataset.yaml.
 The notebook `shots_overview.ipynb` sketches how the dataset is collected. This is forensic work
-to reconstruct lost, prior knowledge.
+to reconstruct lost, prior knowledge. Using work from that notebook, I constructed the
+definition of the dataset 'dataset.yaml'.
+
+
 
 The definitions of the predictors are given in [d3d_signals](https://github.com/PlasmaControl/d3d_signals).
+This dataset uses some more signals than the D3D_100 dataset, such as fs07 (fitlerscope data) to construct
+the TTELM target (which is done in post-processing), and the pedestal info prmtan_xxxxx.
+
+
+
 The TTELM target is calculated in post-processing.
 
 
