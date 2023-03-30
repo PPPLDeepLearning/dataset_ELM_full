@@ -88,7 +88,7 @@ for p in dataset_def["predictors"]:
 df_progress = pd.DataFrame(df_col_defs)
 
 
-for shotnr in shotlist[-200:]:
+for shotnr in shotlist[-10:]:
     logging.info(f"{shotnr} - Processing")
 
     # Start building a dictionary for data collection for the current shot.
@@ -229,6 +229,23 @@ for shotnr in shotlist[-200:]:
                         df_row.update({pred: False})
                         continue
 
+                    # Profiles like edensfit, (ZIPFIT) etc. have
+                    # yunits=rho (radial)
+                    # xunits=time
+                    # However, thomson (ts_core_dens, ts_core_temp) have
+                    # yunits=time
+                    # xunits = rho (radial)
+                    # Switch x and y dimension for thomson
+                    if pred in ["ts_core_dens", "ts_core_temp"]:
+                        tmp_data = ydata
+                        tmp_units = yunits
+
+                        ydata = xdata
+                        yunits = xunits
+
+                        xdata = tmp_data
+                        xunits = tmp_units
+
                     # Data is now downloaded. Store them in HDF5
                     try:
                         grp = df.create_group(map_to)
@@ -252,27 +269,37 @@ for shotnr in shotlist[-200:]:
         # Append success/fail log of each predictor to progress dataframe
         df_progress.loc[len(df_progress)] = df_row
 
-        # # Iterate over all predictors and find the shortest time-base
-        # tmax = 100_000
-        # for k in df.keys():
-        #     if k == "target_ttd":
-        #         continue
-        #     t_k = df[k]["xdata"][-1]
-        #     if t_k < tmax:
-        #         tmax = t_k
-        # logging.info(f"{shotnr}: tmax = {tmax} ms")
-        # df.attrs.create("tmax", tmax)
+        # Iterate over all predictors and find the shortest time-base
+        tmax = 100_000
+        for k in df.keys():
+            if k == "target_ttd":
+                continue
+            t_k = df[k]["xdata"][-1]
+
+            # Fudge: thomson has time-base in seconds.
+            if k in ["ts_core_dens", "ts_core_temp"]:
+                t_k = t_k * 1e3
+
+            if t_k < tmax:
+                tmax = t_k
+        logging.info(f"{shotnr}: tmax = {tmax} ms")
+        df.attrs.create("tmax", tmax)
 
 
-        # tmin = -100.0
-        # for k in df.keys():
-        #     if k == "target_ttd":
-        #         continue
-        #     t_k = df[k]["xdata"][0]
-        #     if t_k > tmin:
-        #         tmin = t_k
-        # logging.info(f"{shotnr}: tmin = {tmin} ms")
-        # df.attrs.create("tmin", tmin)
+        tmin = -100.0
+        for k in df.keys():
+            if k == "target_ttd":
+                continue
+            t_k = df[k]["xdata"][0]
+            # Fudge: thomson has time-base in seconds.
+            if k in ["ts_core_dens", "ts_core_temp"]:
+                t_k = t_k * 1e3
+
+
+            if t_k > tmin:
+                tmin = t_k
+        logging.info(f"{shotnr}: tmin = {tmin} ms")
+        df.attrs.create("tmin", tmin)
 
         #break
 

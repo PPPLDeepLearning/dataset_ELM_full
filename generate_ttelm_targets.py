@@ -103,10 +103,10 @@ with open(args.dataset_def, 'r') as fp:
     dataset_def = yaml.safe_load(fp)
 
 
-for shotnr in dataset_def["shots"][:1]:
+for shotnr in dataset_def["shots"][-10:]:
     # Iterate over the target variables and find the longest time base
     # of the signals. Use this timebase to generate a ttd target
-    with h5py.File(join(args.destination, f"{shotnr}.h5"), "r") as df:
+    with h5py.File(join(args.destination, f"{shotnr}.h5"), "a") as df:
         fs07 = df["/fs07/zdata"][:]
         tb = df["/fs07/xdata"][:]
 
