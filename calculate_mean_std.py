@@ -59,7 +59,7 @@ def process_variable(args):
     return {pred_name: {"min": float(all_signals.min()),
                         "max": float(all_signals.max()),
                         "mean": float(all_signals.mean()), 
-                        "std": float(all_signals.std())}}
+                       "std": float(np.std(all_signals, dtype=np.float64))}}
 
     
 if __name__ == "__main__":
